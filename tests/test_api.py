@@ -1,7 +1,13 @@
 import unittest
 
+from fastapi.testclient import TestClient
+
 from data import find_course, get_all_courses
+from main import app
 from models import Course
+
+
+client = TestClient(app)
 
 
 class CourseModelTests(unittest.TestCase):
@@ -59,6 +65,35 @@ class CourseDataTests(unittest.TestCase):
     def test_find_course_returns_match_or_none(self) -> None:
         self.assertEqual(find_course("web-security").title, "Web Security Essentials")
         self.assertIsNone(find_course("nope"))
+
+
+class BasicRouteTests(unittest.TestCase):
+    def test_root_reports_that_api_is_running(self) -> None:
+        response = client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"message": "Course Catalog API is running"})
+
+    def test_courses_default_to_popularity_order(self) -> None:
+        response = client.get("/courses")
+
+        self.assertEqual(response.status_code, 200)
+        courses = response.json()
+        self.assertEqual(
+            [course["id"] for course in courses],
+            [
+                "ai-integration",
+                "modern-frontend",
+                "web-security",
+                "backend-fastapi",
+                "databases-postgresql",
+                "api-design",
+            ],
+        )
+        self.assertEqual(
+            set(courses[0]),
+            {"id", "title", "description", "credits", "is_elective", "likes"},
+        )
 
 
 if __name__ == "__main__":
