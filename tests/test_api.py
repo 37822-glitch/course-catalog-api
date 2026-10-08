@@ -159,6 +159,29 @@ class CourseQueryTests(unittest.TestCase):
             ],
         )
 
+    def test_invalid_sort_value_returns_422(self) -> None:
+        response = client.get("/courses?sort=banana")
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_search_title_is_case_insensitive(self) -> None:
+        response = client.get("/courses?q=REACT")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            ["modern-frontend"],
+        )
+
+    def test_search_title_matches_multiple_courses(self) -> None:
+        response = client.get("/courses?q=api")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            ["backend-fastapi", "api-design"],
+        )
+
     def test_pagination_slices_after_popularity_sort(self) -> None:
         expected_pages = {
             1: ["ai-integration", "modern-frontend"],
@@ -174,6 +197,17 @@ class CourseQueryTests(unittest.TestCase):
                 self.assertEqual(
                     [course["id"] for course in response.json()], expected_ids
                 )
+
+    def test_page_must_be_at_least_one(self) -> None:
+        response = client.get("/courses?page=0")
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_page_size_must_be_between_one_and_one_hundred(self) -> None:
+        for page_size in (0, 1000):
+            with self.subTest(page_size=page_size):
+                response = client.get(f"/courses?page_size={page_size}")
+                self.assertEqual(response.status_code, 422)
 
     def test_course_list_registers_pagination_dependency(self) -> None:
         route = next(

@@ -42,11 +42,24 @@ python -m unittest discover -s tests -v
 
 - `is_elective=true` returns the two elective courses.
 - `is_elective=false` returns the four required courses.
-- `sort=title` sorts alphabetically; all other values use likes descending.
-- `page` defaults to `1` and `page_size` defaults to `20`.
+- `sort=popular` orders by likes and `sort=title` sorts alphabetically. Other
+  values return `422`.
+- `q` performs a case-insensitive substring search on course titles.
+- `page` defaults to `1` and must be at least `1`.
+- `page_size` defaults to `20` and must be between `1` and `100`.
 
-Filtering happens before sorting, and pagination is applied last through a
-FastAPI dependency.
+Filtering and title search happen before sorting, and pagination is applied
+last through a FastAPI dependency.
+
+## Implemented bonus tasks
+
+- `Literal["popular", "title"]` validates sorting and provides a Swagger
+  dropdown.
+- constrained `Query` parameters reject invalid page and page-size values.
+- `q` provides case-insensitive title search.
+
+The optional `/stats` bonus was intentionally not added, keeping exactly three
+application routes.
 
 ## What was verified
 
@@ -57,10 +70,15 @@ FastAPI dependency.
 - `GET /courses?is_elective=true` returned `ai-integration` and `api-design`.
 - `GET /courses?is_elective=false` returned the four required courses.
 - `GET /courses?sort=title` returned the expected alphabetical order.
+- `GET /courses?sort=banana` returned `422`.
+- `GET /courses?q=react` returned `modern-frontend`.
+- `GET /courses?q=api` returned `backend-fastapi` and `api-design`.
 - Pagination with `page_size=2` returned the expected two courses on pages
   1–3 and an empty list on page 4.
+- Invalid pagination values such as `page=0` and `page_size=1000` returned
+  `422`.
 - `GET /courses/web-security` returned the matching course.
 - `GET /courses/nope` returned `404` with `{"detail": "Course not found"}`.
 - `/docs`, `/redoc`, and `/openapi.json` loaded successfully.
 - The OpenAPI schema contained exactly three application paths.
-- All 15 automated tests passed on Python 3.12.
+- All 20 automated tests passed on Python 3.12.
