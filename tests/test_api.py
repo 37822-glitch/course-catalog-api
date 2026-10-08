@@ -1,9 +1,10 @@
 import unittest
 
 from fastapi.testclient import TestClient
+from fastapi.routing import APIRoute
 
 from data import find_course, get_all_courses
-from main import app
+from main import app, pagination
 from models import Course
 
 
@@ -116,6 +117,83 @@ class BasicRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {"detail": "Course not found"})
+
+
+class CourseQueryTests(unittest.TestCase):
+    def test_filter_elective_courses(self) -> None:
+        response = client.get("/courses?is_elective=true")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            ["ai-integration", "api-design"],
+        )
+
+    def test_filter_required_courses(self) -> None:
+        response = client.get("/courses?is_elective=false")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            [
+                "modern-frontend",
+                "web-security",
+                "backend-fastapi",
+                "databases-postgresql",
+            ],
+        )
+
+    def test_sort_courses_by_title(self) -> None:
+        response = client.get("/courses?sort=title")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            [
+                "ai-integration",
+                "api-design",
+                "backend-fastapi",
+                "modern-frontend",
+                "databases-postgresql",
+                "web-security",
+            ],
+        )
+
+    def test_pagination_slices_after_popularity_sort(self) -> None:
+        expected_pages = {
+            1: ["ai-integration", "modern-frontend"],
+            2: ["web-security", "backend-fastapi"],
+            3: ["databases-postgresql", "api-design"],
+            4: [],
+        }
+
+        for page, expected_ids in expected_pages.items():
+            with self.subTest(page=page):
+                response = client.get(f"/courses?page={page}&page_size=2")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    [course["id"] for course in response.json()], expected_ids
+                )
+
+    def test_course_list_registers_pagination_dependency(self) -> None:
+        route = next(
+            route
+            for route in app.routes
+            if isinstance(route, APIRoute)
+            and route.path == "/courses"
+            and "GET" in route.methods
+        )
+
+        self.assertIn(pagination, [dependency.call for dependency in route.dependant.dependencies])
+
+    def test_openapi_contains_exactly_three_application_paths(self) -> None:
+        response = client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.json()["paths"]),
+            {"/", "/courses", "/courses/{course_id}"},
+        )
 
 
 if __name__ == "__main__":
