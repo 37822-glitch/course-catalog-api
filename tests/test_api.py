@@ -95,6 +95,28 @@ class BasicRouteTests(unittest.TestCase):
             {"id", "title", "description", "credits", "is_elective", "likes"},
         )
 
+    def test_get_course_returns_the_requested_course(self) -> None:
+        response = client.get("/courses/web-security")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "id": "web-security",
+                "title": "Web Security Essentials",
+                "description": "JWT/OAuth2, XSS, CSRF, and SQL injection defense.",
+                "credits": 4,
+                "is_elective": False,
+                "likes": 21,
+            },
+        )
+
+    def test_get_course_returns_required_404(self) -> None:
+        response = client.get("/courses/nope")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"detail": "Course not found"})
+
 
 if __name__ == "__main__":
     unittest.main()

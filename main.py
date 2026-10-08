@@ -1,6 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
-from data import get_all_courses
+from data import find_course, get_all_courses
 from models import Course
 
 
@@ -16,3 +16,11 @@ def read_root() -> dict[str, str]:
 def read_courses() -> list[Course]:
     courses = get_all_courses()
     return sorted(courses, key=lambda course: course.likes, reverse=True)
+
+
+@app.get("/courses/{course_id}", response_model=Course)
+def read_course(course_id: str) -> Course:
+    course = find_course(course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
