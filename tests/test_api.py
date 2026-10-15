@@ -1,5 +1,6 @@
 import unittest
 
+import models
 from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
 
@@ -83,6 +84,36 @@ class CourseModelTests(unittest.TestCase):
         self.assertTrue(course.is_elective)
         self.assertEqual(course.likes, 8)
 
+    def test_course_serializes_python_field_names_as_camel_case(self) -> None:
+        course = Course(
+            id="sample",
+            title="Sample Course",
+            description="A sample course.",
+            credits=3,
+            is_elective=True,
+        )
+
+        payload = course.model_dump(by_alias=True)
+
+        self.assertEqual(payload.get("isElective"), True)
+        self.assertNotIn("is_elective", payload)
+
+    def test_enrollment_input_accepts_aliases_and_python_names(self) -> None:
+        enrollment_type = getattr(models, "EnrollmentIn", None)
+        self.assertIsNotNone(enrollment_type, "EnrollmentIn must be defined")
+
+        camel_case = enrollment_type.model_validate(
+            {"courseId": "web-security", "studentName": "Aigerim"}
+        )
+        snake_case = enrollment_type.model_validate(
+            {"course_id": "api-design", "student_name": "Dana"}
+        )
+
+        self.assertEqual(camel_case.course_id, "web-security")
+        self.assertEqual(camel_case.student_name, "Aigerim")
+        self.assertEqual(snake_case.course_id, "api-design")
+        self.assertEqual(snake_case.student_name, "Dana")
+
 
 class CourseDataTests(unittest.TestCase):
     def test_catalog_contains_the_six_lab_courses(self) -> None:
@@ -136,7 +167,7 @@ class BasicRouteTests(unittest.TestCase):
         )
         self.assertEqual(
             set(courses[0]),
-            {"id", "title", "description", "credits", "is_elective", "likes"},
+            {"id", "title", "description", "credits", "isElective", "likes"},
         )
 
     def test_get_course_returns_the_requested_course(self) -> None:
@@ -150,7 +181,7 @@ class BasicRouteTests(unittest.TestCase):
                 "title": "Web Security Essentials",
                 "description": "JWT/OAuth2, XSS, CSRF, and SQL injection defense.",
                 "credits": 4,
-                "is_elective": False,
+                "isElective": False,
                 "likes": 21,
             },
         )
