@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import main
 import models
@@ -6,7 +7,7 @@ from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
 
 from data import find_course, get_all_courses
-from main import app, pagination
+from main import app, cors_origins, pagination
 from models import Course
 
 
@@ -54,6 +55,46 @@ class CorsTests(unittest.TestCase):
             "content-type",
             response.headers["access-control-allow-headers"].lower(),
         )
+
+    def test_unlisted_method_and_header_preflights_are_rejected(self) -> None:
+        cases = (
+            ({"Access-Control-Request-Method": "DELETE"}, "method"),
+            (
+                {
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "authorization",
+                },
+                "headers",
+            ),
+        )
+
+        for extra_headers, reason in cases:
+            with self.subTest(reason=reason):
+                response = client.options(
+                    "/enrollments",
+                    headers={
+                        "Origin": "http://localhost:3000",
+                        **extra_headers,
+                    },
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(f"Disallowed CORS {reason}", response.text)
+
+
+class CorsConfigurationTests(unittest.TestCase):
+    def test_default_origin_is_localhost(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(cors_origins(), ["http://localhost:3000"])
+
+    def test_multiple_origins_are_read_from_the_environment(self) -> None:
+        configured = "http://localhost:3000,http://127.0.0.1:3000"
+
+        with patch.dict("os.environ", {"CORS_ORIGINS": configured}, clear=True):
+            self.assertEqual(
+                cors_origins(),
+                ["http://localhost:3000", "http://127.0.0.1:3000"],
+            )
 
 
 class CourseModelTests(unittest.TestCase):
