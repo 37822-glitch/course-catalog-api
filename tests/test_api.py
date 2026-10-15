@@ -11,6 +11,49 @@ from models import Course
 client = TestClient(app)
 
 
+class CorsTests(unittest.TestCase):
+    def test_allowed_frontend_origin_receives_permission_header(self) -> None:
+        response = client.get(
+            "/courses",
+            headers={"Origin": "http://localhost:3000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "http://localhost:3000",
+        )
+
+    def test_unlisted_origins_receive_no_permission_header(self) -> None:
+        for origin in ("https://example.com", "http://localhost:3000/"):
+            with self.subTest(origin=origin):
+                response = client.get("/courses", headers={"Origin": origin})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn("access-control-allow-origin", response.headers)
+
+    def test_enrollment_json_preflight_is_allowed(self) -> None:
+        response = client.options(
+            "/enrollments",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "http://localhost:3000",
+        )
+        self.assertIn("POST", response.headers["access-control-allow-methods"])
+        self.assertIn(
+            "content-type",
+            response.headers["access-control-allow-headers"].lower(),
+        )
+
+
 class CourseModelTests(unittest.TestCase):
     def test_defaults_are_false_and_zero(self) -> None:
         course = Course(
