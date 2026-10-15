@@ -1,12 +1,12 @@
 # Course Catalog API
 
-A standalone FastAPI backend for the Lab 4 course catalog.
+The FastAPI backend for the YZ-AWT course catalog. Lab 5 adds browser-safe
+camelCase responses, CORS, persistent-in-memory likes, and enrollment routes
+for the Next.js frontend.
 
-## Requirements
+## Requirements and setup
 
 - Python 3.10 or newer
-
-## Set up the environment
 
 ```bash
 python3 -m venv .venv
@@ -17,68 +17,77 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
-fastapi dev main.py
+fastapi dev main.py --host 127.0.0.1 --port 8000
 ```
 
-The API runs at <http://127.0.0.1:8000>. Interactive documentation is available
-at <http://127.0.0.1:8000/docs>, with ReDoc at
-<http://127.0.0.1:8000/redoc>.
-
-## Test
-
-```bash
-python -m unittest discover -s tests -v
-```
+The API is available at <http://localhost:8000>. Open Swagger UI at
+<http://localhost:8000/docs>, ReDoc at <http://localhost:8000/redoc>, and the
+OpenAPI schema at <http://localhost:8000/openapi.json>.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Confirm that the API is running |
-| `GET` | `/courses` | List, filter, sort, and paginate courses |
-| `GET` | `/courses/{course_id}` | Get one course or return a 404 |
+| `GET` | `/` | Health message |
+| `GET` | `/courses` | Filter, search, sort, and paginate courses |
+| `GET` | `/courses/{course_id}` | Read one course |
+| `POST` | `/courses/{course_id}/like` | Increment and return a course's likes |
+| `POST` | `/enrollments` | Validate and create an enrollment |
+| `GET` | `/enrollments` | List in-memory enrollments |
 
-### Course query parameters
+Successful course and enrollment responses use camelCase aliases:
 
-- `is_elective=true` returns the two elective courses.
-- `is_elective=false` returns the four required courses.
-- `sort=popular` orders by likes and `sort=title` sorts alphabetically. Other
-  values return `422`.
-- `q` performs a case-insensitive substring search on course titles.
-- `page` defaults to `1` and must be at least `1`.
-- `page_size` defaults to `20` and must be between `1` and `100`.
+```json
+{
+  "courseId": "web-security",
+  "studentName": "Aigerim"
+}
+```
 
-Filtering and title search happen before sorting, and pagination is applied
-last through a FastAPI dependency.
+`studentName` must have at least two characters. Unknown course identifiers
+return `404` with `{"detail":"Course not found"}`. New enrollments return
+`201 Created`.
 
-## Implemented bonus tasks
+## Course query parameters
 
-- `Literal["popular", "title"]` validates sorting and provides a Swagger
-  dropdown.
-- constrained `Query` parameters reject invalid page and page-size values.
-- `q` provides case-insensitive title search.
+- `is_elective=true` returns electives; `false` returns required courses.
+- `sort=popular` sorts by likes and `sort=title` sorts alphabetically.
+- `q` performs a case-insensitive title search.
+- `page` starts at `1`; `page_size` must be between `1` and `100`.
 
-The optional `/stats` bonus was intentionally not added, keeping exactly three
-application routes.
+Filtering and search occur before sorting, with pagination applied last.
 
-## What was verified
+## CORS configuration
 
-- `GET /` returned `{"message": "Course Catalog API is running"}`.
-- `GET /courses` returned all six courses ordered by likes: `ai-integration`,
-  `modern-frontend`, `web-security`, `backend-fastapi`,
-  `databases-postgresql`, and `api-design`.
-- `GET /courses?is_elective=true` returned `ai-integration` and `api-design`.
-- `GET /courses?is_elective=false` returned the four required courses.
-- `GET /courses?sort=title` returned the expected alphabetical order.
-- `GET /courses?sort=banana` returned `422`.
-- `GET /courses?q=react` returned `modern-frontend`.
-- `GET /courses?q=api` returned `backend-fastapi` and `api-design`.
-- Pagination with `page_size=2` returned the expected two courses on pages
-  1–3 and an empty list on page 4.
-- Invalid pagination values such as `page=0` and `page_size=1000` returned
-  `422`.
-- `GET /courses/web-security` returned the matching course.
-- `GET /courses/nope` returned `404` with `{"detail": "Course not found"}`.
-- `/docs`, `/redoc`, and `/openapi.json` loaded successfully.
-- The OpenAPI schema contained exactly three application paths.
-- All 20 automated tests passed on Python 3.12.
+The default allowed origin is exactly `http://localhost:3000`. Configure one
+or more comma-separated origins before startup when another frontend origin is
+required:
+
+```bash
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 fastapi dev main.py
+```
+
+The final policy deliberately permits only `GET` and `POST`, and only the
+`Content-Type` request header. A trailing slash changes an origin and is not
+accepted unless explicitly configured.
+
+## Runtime state
+
+Likes and enrollments are intentionally stored in memory for this lab. They
+persist across requests in one process and reset when the API restarts. No
+database is required.
+
+## Selected bonus tasks
+
+- Pydantic alias generation creates a single camelCase API contract.
+- `CORS_ORIGINS` supports environment-specific frontend origins.
+- CORS methods and headers use explicit allowlists instead of wildcards.
+
+The two intentionally destructive bonus experiments are not retained in the
+final source.
+
+## Verify
+
+```bash
+python -m unittest discover -s tests -v
+```
