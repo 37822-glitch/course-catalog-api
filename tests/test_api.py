@@ -1,5 +1,6 @@
 import unittest
 
+import main
 import models
 from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
@@ -193,6 +194,91 @@ class BasicRouteTests(unittest.TestCase):
         self.assertEqual(response.json(), {"detail": "Course not found"})
 
 
+class MutationRouteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.course = find_course("web-security")
+        assert self.course is not None
+        self.original_likes = self.course.likes
+        enrollments = getattr(main, "ENROLLMENTS", None)
+        if enrollments is not None:
+            enrollments.clear()
+
+    def tearDown(self) -> None:
+        self.course.likes = self.original_likes
+        enrollments = getattr(main, "ENROLLMENTS", None)
+        if enrollments is not None:
+            enrollments.clear()
+
+    def test_like_increments_and_persists_on_the_course(self) -> None:
+        first_response = client.post("/courses/web-security/like")
+        second_response = client.get("/courses/web-security")
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["likes"], self.original_likes + 1)
+        self.assertEqual(second_response.json()["likes"], self.original_likes + 1)
+
+    def test_like_unknown_course_returns_required_404(self) -> None:
+        response = client.post("/courses/nope/like")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"detail": "Course not found"})
+
+    def test_enrollment_is_created_and_visible_in_the_list(self) -> None:
+        response = client.post(
+            "/enrollments",
+            json={"courseId": "web-security", "studentName": "Aigerim"},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.json(),
+            {
+                "id": 1,
+                "courseId": "web-security",
+                "studentName": "Aigerim",
+            },
+        )
+        self.assertEqual(client.get("/enrollments").json(), [response.json()])
+
+    def test_one_letter_student_name_returns_alias_aware_422(self) -> None:
+        response = client.post(
+            "/enrollments",
+            json={"courseId": "web-security", "studentName": "A"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["detail"][0]["loc"], ["body", "studentName"])
+
+    def test_enrollment_unknown_course_returns_required_404(self) -> None:
+        response = client.post(
+            "/enrollments",
+            json={"courseId": "nope", "studentName": "Aigerim"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"detail": "Course not found"})
+
+    def test_openapi_contains_exactly_six_application_operations(self) -> None:
+        paths = client.get("/openapi.json").json()["paths"]
+        operations = {
+            (method.upper(), path)
+            for path, methods in paths.items()
+            for method in methods
+        }
+
+        self.assertEqual(
+            operations,
+            {
+                ("GET", "/"),
+                ("GET", "/courses"),
+                ("GET", "/courses/{course_id}"),
+                ("POST", "/courses/{course_id}/like"),
+                ("POST", "/enrollments"),
+                ("GET", "/enrollments"),
+            },
+        )
+
+
 class CourseQueryTests(unittest.TestCase):
     def test_filter_elective_courses(self) -> None:
         response = client.get("/courses?is_elective=true")
@@ -293,16 +379,6 @@ class CourseQueryTests(unittest.TestCase):
         )
 
         self.assertIn(pagination, [dependency.call for dependency in route.dependant.dependencies])
-
-    def test_openapi_contains_exactly_three_application_paths(self) -> None:
-        response = client.get("/openapi.json")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            set(response.json()["paths"]),
-            {"/", "/courses", "/courses/{course_id}"},
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
