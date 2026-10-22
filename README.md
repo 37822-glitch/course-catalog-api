@@ -4,6 +4,45 @@ The FastAPI backend for the YZ-AWT course catalog. Lab 5 adds browser-safe
 camelCase responses, CORS, persistent-in-memory likes, and enrollment routes
 for the Next.js frontend.
 
+## What changed
+
+- `CORSMiddleware` grants the exact browser origin
+  `http://localhost:3000` permission to read API responses. The policy allows
+  only the `GET` and `POST` methods and the `Content-Type` request header used
+  by this lab.
+- `CamelModel` keeps Python field names in snake_case while publishing JSON and
+  validation errors with camelCase names such as `isElective`, `courseId`, and
+  `studentName`.
+- `POST /courses/{course_id}/like` increments a course's in-memory counter and
+  returns the updated course, `POST /enrollments` validates and creates a record
+  with `201 Created`, and `GET /enrollments` lists the records created since the
+  current server process started.
+
+An updated like response has the complete course shape:
+
+```json
+{
+  "id": "web-security",
+  "title": "Web Security Essentials",
+  "description": "JWT/OAuth2, XSS, CSRF, and SQL injection defense.",
+  "credits": 4,
+  "isElective": false,
+  "likes": 22
+}
+```
+
+Creating the first enrollment returns:
+
+```json
+{
+  "id": 1,
+  "courseId": "web-security",
+  "studentName": "Aigerim"
+}
+```
+
+`GET /enrollments` returns the same records as a JSON array.
+
 ## Requirements and setup
 
 - Python 3.10 or newer
