@@ -3,13 +3,13 @@ import importlib
 from unittest.mock import patch
 
 import main
-import models
+import schemas
 from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
 
 from data import find_course, get_all_courses
 from main import app, cors_origins, pagination
-from models import Course
+from schemas import Course
 
 
 client = TestClient(app)
@@ -159,7 +159,7 @@ class CourseModelTests(unittest.TestCase):
         self.assertNotIn("is_elective", payload)
 
     def test_enrollment_input_accepts_aliases_and_python_names(self) -> None:
-        enrollment_type = getattr(models, "EnrollmentIn", None)
+        enrollment_type = getattr(schemas, "EnrollmentIn", None)
         self.assertIsNotNone(enrollment_type, "EnrollmentIn must be defined")
 
         camel_case = enrollment_type.model_validate(

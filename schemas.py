@@ -26,4 +26,3 @@ class EnrollmentIn(CamelModel):
 
 class Enrollment(EnrollmentIn):
     id: int
-
