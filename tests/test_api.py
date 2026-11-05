@@ -99,6 +99,15 @@ class CourseDatabaseRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([course["id"] for course in response.json()], ["ai-integration"])
 
+    def test_level_is_returned_and_can_filter_courses(self) -> None:
+        response = self.client.get("/courses", params={"level": "beginner"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [course["id"] for course in response.json()],
+            ["ai-integration", "api-design"],
+        )
+        self.assertTrue(all(course["level"] == "beginner" for course in response.json()))
+
     def test_single_course_and_missing_course(self) -> None:
         response = self.client.get("/courses/backend-fastapi")
         self.assertEqual(response.status_code, 200)
