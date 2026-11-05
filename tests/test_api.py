@@ -202,6 +202,41 @@ class EnrollmentDatabaseRouteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_known_constraint_errors_are_mapped_to_client_responses(self) -> None:
+        client = TestClient(self.client.app, raise_server_exceptions=False)
+        cases = (
+            (
+                "/students",
+                {"name": "Aigerim Two", "email": "aigerim@example.com"},
+                409,
+                "Student with this email already exists",
+            ),
+            (
+                "/enrollments",
+                {"courseId": "ai-integration", "studentId": 3},
+                409,
+                "Student is already enrolled in this course",
+            ),
+            (
+                "/enrollments",
+                {"courseId": "nope", "studentId": 3},
+                404,
+                "Course not found",
+            ),
+            (
+                "/enrollments",
+                {"courseId": "web-security", "studentId": 999},
+                404,
+                "Student not found",
+            ),
+        )
+
+        for path, body, status, detail in cases:
+            with self.subTest(detail=detail):
+                response = client.post(path, json=body)
+                self.assertEqual(response.status_code, status)
+                self.assertEqual(response.json(), {"detail": detail})
+
 
 if __name__ == "__main__":
     unittest.main()
