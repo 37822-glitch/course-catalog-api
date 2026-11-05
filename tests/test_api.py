@@ -2,7 +2,7 @@ import importlib
 import unittest
 
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import delete, update
 
 
 class DatabaseConfigurationTests(unittest.TestCase):
@@ -127,6 +127,80 @@ class CourseDatabaseRouteTests(unittest.TestCase):
     def test_course_routes_use_the_database_dependency(self) -> None:
         db_module = importlib.import_module("db")
         self.assertTrue(hasattr(db_module, "get_db"))
+
+
+class EnrollmentDatabaseRouteTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        main = importlib.import_module("main")
+        cls.client = TestClient(main.app)
+        cls.db_module = importlib.import_module("db")
+        cls.models = importlib.import_module("models")
+
+    def setUp(self) -> None:
+        self._remove_test_student()
+
+    def tearDown(self) -> None:
+        self._remove_test_student()
+
+    def _remove_test_student(self) -> None:
+        with self.db_module.SessionLocal.begin() as session:
+            session.execute(
+                delete(self.models.Student).where(
+                    self.models.Student.email == "lab7-test@example.com"
+                )
+            )
+
+    def test_schemas_define_the_database_contract(self) -> None:
+        schemas = importlib.import_module("schemas")
+        for name in (
+            "StudentIn",
+            "StudentOut",
+            "EnrollmentIn",
+            "EnrollmentOut",
+            "EnrollmentDetail",
+            "CourseStats",
+        ):
+            self.assertTrue(hasattr(schemas, name), f"{name} must be defined")
+
+    def test_enrollment_list_and_course_statistics_use_joins(self) -> None:
+        enrollments = self.client.get("/enrollments")
+        self.assertEqual(enrollments.status_code, 200)
+        self.assertEqual(len(enrollments.json()), 6)
+        self.assertEqual(enrollments.json()[0]["courseTitle"], "Modern Frontend: React & Next.js")
+        self.assertEqual(enrollments.json()[0]["studentName"], "Aigerim Sadykova")
+
+        stats = self.client.get("/stats/courses")
+        self.assertEqual(stats.status_code, 200)
+        self.assertEqual(sum(row["enrolled"] for row in stats.json()), 6)
+        self.assertEqual(stats.json()[0], {"courseId": "ai-integration", "enrolled": 3})
+        self.assertEqual(
+            {row["courseId"]: row["enrolled"] for row in stats.json()}["web-security"],
+            0,
+        )
+
+    def test_student_and_enrollment_are_created_by_the_database(self) -> None:
+        student_response = self.client.post(
+            "/students",
+            json={"name": "Lab Seven", "email": "lab7-test@example.com"},
+        )
+        self.assertEqual(student_response.status_code, 201)
+        student_id = student_response.json()["id"]
+
+        enrollment_response = self.client.post(
+            "/enrollments",
+            json={"courseId": "web-security", "studentId": student_id},
+        )
+        self.assertEqual(enrollment_response.status_code, 201)
+        self.assertEqual(enrollment_response.json()["courseId"], "web-security")
+        self.assertIsNotNone(enrollment_response.json()["enrolledAt"])
+
+    def test_short_name_is_rejected_before_the_database(self) -> None:
+        response = self.client.post(
+            "/students",
+            json={"name": "N", "email": "lab7-test@example.com"},
+        )
+        self.assertEqual(response.status_code, 422)
 
 
 if __name__ == "__main__":
