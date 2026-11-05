@@ -32,6 +32,56 @@ class DatabaseConfigurationTests(unittest.TestCase):
         self.assertIs(db.SessionLocal.kw["bind"], db.engine)
 
 
+class DatabaseModelTests(unittest.TestCase):
+    def test_metadata_describes_the_lab_6_schema(self) -> None:
+        try:
+            orm_models = importlib.import_module("models")
+        except ModuleNotFoundError as exc:
+            self.fail(f"ORM models module is missing: {exc.name}")
+
+        self.assertEqual(
+            set(orm_models.Base.metadata.tables),
+            {"courses", "students", "enrollments"},
+        )
+
+        course = orm_models.Course.__table__
+        student = orm_models.Student.__table__
+        enrollment = orm_models.Enrollment.__table__
+
+        self.assertEqual(course.c.is_elective.server_default.arg.text, "false")
+        self.assertEqual(course.c.likes.server_default.arg.text, "0")
+        self.assertTrue(student.c.id.identity.always)
+        self.assertTrue(enrollment.c.id.identity.always)
+        self.assertTrue(enrollment.c.student_id.index)
+
+        foreign_keys = {
+            column.name: next(iter(column.foreign_keys)).ondelete
+            for column in (enrollment.c.course_id, enrollment.c.student_id)
+        }
+        self.assertEqual(
+            foreign_keys,
+            {"course_id": "RESTRICT", "student_id": "CASCADE"},
+        )
+
+        names = {
+            item.name
+            for table in orm_models.Base.metadata.tables.values()
+            for item in (*table.constraints, *table.indexes)
+        }
+        self.assertTrue(
+            {
+                "courses_credits_check",
+                "courses_likes_check",
+                "students_name_check",
+                "students_email_key",
+                "enrollments_course_id_student_id_key",
+                "enrollments_course_id_fkey",
+                "enrollments_student_id_fkey",
+                "enrollments_student_id_idx",
+            }.issubset(names)
+        )
+
+
 class CorsTests(unittest.TestCase):
     def test_allowed_frontend_origin_receives_permission_header(self) -> None:
         response = client.get(
