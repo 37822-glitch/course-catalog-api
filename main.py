@@ -1,34 +1,28 @@
-import os
-from typing import Annotated, Literal
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
 
-from data import find_course, get_all_courses
-from schemas import Course, Enrollment, EnrollmentIn
+from db import get_db
+from models import Course
+from schemas import CourseOut
 
 
 app = FastAPI(title="Course Catalog API")
 
-
-def cors_origins() -> list[str]:
-    return os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins(),
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-ENROLLMENTS: list[Enrollment] = []
+SessionDep = Annotated[Session, Depends(get_db)]
 
 
-def pagination(
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, int]:
+def pagination(page: int = 1, page_size: int = 20) -> dict[str, int]:
     return {"offset": (page - 1) * page_size, "limit": page_size}
 
 
@@ -37,61 +31,45 @@ def read_root() -> dict[str, str]:
     return {"message": "Course Catalog API is running"}
 
 
-@app.get("/courses", response_model=list[Course])
-def read_courses(
+@app.get("/courses", response_model=list[CourseOut])
+def list_courses(
+    db: SessionDep,
     is_elective: bool | None = None,
-    sort: Literal["popular", "title"] = "popular",
-    q: str | None = None,
+    sort: str = "popular",
     p: dict = Depends(pagination),
 ) -> list[Course]:
-    courses = get_all_courses()
+    stmt = select(Course)
 
     if is_elective is not None:
-        courses = [
-            course for course in courses if course.is_elective == is_elective
-        ]
-
-    if q is not None:
-        query = q.lower()
-        courses = [course for course in courses if query in course.title.lower()]
+        stmt = stmt.where(Course.is_elective == is_elective)
 
     if sort == "title":
-        courses.sort(key=lambda course: course.title)
+        stmt = stmt.order_by(Course.title)
     else:
-        courses.sort(key=lambda course: course.likes, reverse=True)
+        stmt = stmt.order_by(Course.likes.desc(), Course.id)
 
-    offset = p["offset"]
-    limit = p["limit"]
-    return courses[offset : offset + limit]
+    stmt = stmt.limit(p["limit"]).offset(p["offset"])
+    return list(db.scalars(stmt).all())
 
 
-@app.get("/courses/{course_id}", response_model=Course)
-def read_course(course_id: str) -> Course:
-    course = find_course(course_id)
+@app.get("/courses/{course_id}", response_model=CourseOut)
+def get_course(course_id: str, db: SessionDep) -> Course:
+    course = db.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
     return course
 
 
-@app.post("/courses/{course_id}/like", response_model=Course)
-def like_course(course_id: str) -> Course:
-    course = find_course(course_id)
+@app.post("/courses/{course_id}/like", response_model=CourseOut)
+def like_course(course_id: str, db: SessionDep) -> Course:
+    stmt = (
+        update(Course)
+        .where(Course.id == course_id)
+        .values(likes=Course.likes + 1)
+        .returning(Course)
+    )
+    course = db.scalars(stmt).one_or_none()
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    course.likes += 1
+    db.commit()
     return course
-
-
-@app.post("/enrollments", response_model=Enrollment, status_code=201)
-def create_enrollment(data: EnrollmentIn) -> Enrollment:
-    if find_course(data.course_id) is None:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    enrollment = Enrollment(id=len(ENROLLMENTS) + 1, **data.model_dump())
-    ENROLLMENTS.append(enrollment)
-    return enrollment
-
-
-@app.get("/enrollments", response_model=list[Enrollment])
-def read_enrollments() -> list[Enrollment]:
-    return ENROLLMENTS
