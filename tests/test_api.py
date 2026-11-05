@@ -1,4 +1,5 @@
 import unittest
+import importlib
 from unittest.mock import patch
 
 import main
@@ -12,6 +13,23 @@ from models import Course
 
 
 client = TestClient(app)
+
+
+class DatabaseConfigurationTests(unittest.TestCase):
+    def test_settings_engine_and_session_factory_use_database_url(self) -> None:
+        try:
+            config = importlib.import_module("config")
+            db = importlib.import_module("db")
+        except ModuleNotFoundError as exc:
+            self.fail(f"database module is missing: {exc.name}")
+
+        self.assertEqual(
+            config.settings.database_url,
+            "postgresql+psycopg://catalog_app:change-me@localhost:5432/course_catalog",
+        )
+        self.assertFalse(config.settings.sql_echo)
+        self.assertEqual(db.engine.url.database, "course_catalog")
+        self.assertIs(db.SessionLocal.kw["bind"], db.engine)
 
 
 class CorsTests(unittest.TestCase):
