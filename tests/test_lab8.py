@@ -201,6 +201,35 @@ class GraphQLMutationTests(unittest.TestCase):
         self.assertIsNone(payload["enrollment"])
         self.assertEqual(payload["userErrors"][0]["code"], "ALREADY_ENROLLED")
 
+    def test_create_student_uses_shared_name_and_email_validation(self) -> None:
+        cases = (
+            ("N", "valid@example.com", "INVALID_NAME"),
+            ("Valid Name", "not-an-email", "INVALID_EMAIL"),
+        )
+
+        for name, email, expected_code in cases:
+            with self.subTest(expected_code=expected_code):
+                response = self.client.post(
+                    "/graphql",
+                    json={
+                        "query": """
+                        mutation CreateStudent($input: CreateStudentInput!) {
+                          createStudent(input: $input) {
+                            student { id }
+                            userErrors { code message }
+                          }
+                        }
+                        """,
+                        "variables": {"input": {"name": name, "email": email}},
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn("errors", response.json())
+                payload = response.json()["data"]["createStudent"]
+                self.assertIsNone(payload["student"])
+                self.assertEqual(payload["userErrors"][0]["code"], expected_code)
+
     def test_like_course_returns_incremented_course(self) -> None:
         before = self.client.get("/courses/api-design").json()["likes"]
         try:

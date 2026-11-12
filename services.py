@@ -1,10 +1,14 @@
 """Services layer: application rules without HTTP and without GraphQL."""
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models import Course, Enrollment, Student
+
+
+EMAIL = TypeAdapter(EmailStr)
 
 
 CONSTRAINT_ERRORS = {
@@ -44,7 +48,11 @@ def commit(db: Session) -> None:
 def create_student(db: Session, name: str, email: str) -> Student:
     if len(name.strip()) < 2:
         raise ServiceError("INVALID_NAME", "Name must have at least 2 characters")
-    student = Student(name=name, email=email)
+    try:
+        valid_email = str(EMAIL.validate_python(email))
+    except ValidationError:
+        raise ServiceError("INVALID_EMAIL", "Enter a valid email address") from None
+    student = Student(name=name, email=valid_email)
     db.add(student)
     commit(db)
     return student
