@@ -170,3 +170,8 @@ at 3 SQL statements when the data grew from 3 to 20 students.
   `errors` list. RFC 9457 permits extension members, so this list supplements the
   required Problem Details fields and lets the client fix every invalid value in
   one response.
+- **Shared `createStudent` rule.** `services.create_student` rejects a name with
+  fewer than two non-space characters as `INVALID_NAME`. REST maps the new code
+  to a 422 `invalid-name` Problem Details response, while GraphQL returns it in
+  `userErrors`; every new service code needs a REST entry in `PROBLEMS` to avoid
+  an unhandled 500 response.

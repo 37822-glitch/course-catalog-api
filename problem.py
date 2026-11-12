@@ -17,6 +17,7 @@ PROBLEMS = {
     "ALREADY_ENROLLED": (409, "already-enrolled", "Already enrolled"),
     "COURSE_NOT_FOUND": (404, "course-not-found", "Course not found"),
     "STUDENT_NOT_FOUND": (404, "student-not-found", "Student not found"),
+    "INVALID_NAME": (422, "invalid-name", "Invalid name"),
 }
 
 

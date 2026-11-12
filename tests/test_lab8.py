@@ -380,5 +380,65 @@ class ValidationProblemDetailsBonusTests(unittest.TestCase):
         )
 
 
+class CreateStudentBonusTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def create_student(self, name: str, email: str) -> dict:
+        response = self.client.post(
+            "/graphql",
+            json={
+                "query": """
+                mutation CreateStudent($input: CreateStudentInput!) {
+                  createStudent(input: $input) {
+                    student { id name }
+                    userErrors { code message }
+                  }
+                }
+                """,
+                "variables": {"input": {"name": name, "email": email}},
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_whitespace_name_is_one_shared_rule_with_rest_translation(self) -> None:
+        response = self.client.post(
+            "/students",
+            json={"name": "  ", "email": "sp@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["type"],
+            "https://example.com/problems/invalid-name",
+        )
+        self.assertEqual(response.json()["detail"], "Name must have at least 2 characters")
+
+    def test_create_student_mutation_returns_shared_rule_errors(self) -> None:
+        invalid = self.create_student("N", "n@example.com")
+        duplicate = self.create_student("Nurlan Abenov", "aigerim@example.com")
+
+        self.assertEqual(
+            invalid["data"]["createStudent"]["userErrors"][0]["code"],
+            "INVALID_NAME",
+        )
+        self.assertIsNone(invalid["data"]["createStudent"]["student"])
+        self.assertEqual(
+            duplicate["data"]["createStudent"]["userErrors"][0]["code"],
+            "EMAIL_TAKEN",
+        )
+
+    def test_schema_exposes_create_student_mutation(self) -> None:
+        graphql_api = importlib.import_module("graphql_api")
+
+        self.assertIn(
+            "createStudent(input: CreateStudentInput!): CreateStudentPayload!",
+            graphql_api.schema.as_str(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

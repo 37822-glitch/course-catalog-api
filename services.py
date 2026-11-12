@@ -42,6 +42,8 @@ def commit(db: Session) -> None:
 
 
 def create_student(db: Session, name: str, email: str) -> Student:
+    if len(name.strip()) < 2:
+        raise ServiceError("INVALID_NAME", "Name must have at least 2 characters")
     student = Student(name=name, email=email)
     db.add(student)
     commit(db)
