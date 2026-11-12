@@ -324,5 +324,36 @@ class GraphQLProtectionTests(unittest.TestCase):
         self.assertEqual(response.json()["data"]["__schema"]["queryType"]["name"], "Query")
 
 
+class MyCoursesRestRouteTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_student_and_student_enrollments_supply_the_rest_screen(self) -> None:
+        student = self.client.get("/students/2")
+        enrollments = self.client.get("/students/2/enrollments")
+
+        self.assertEqual(student.status_code, 200)
+        self.assertEqual(student.json()["name"], "Daniyar Bekov")
+        self.assertEqual(enrollments.status_code, 200)
+        self.assertEqual(
+            [item["courseId"] for item in enrollments.json()],
+            ["modern-frontend", "backend-fastapi", "ai-integration"],
+        )
+        self.assertEqual(student.headers["x-sql-queries"], "1")
+        self.assertEqual(enrollments.headers["x-sql-queries"], "1")
+
+    def test_unknown_student_is_problem_details(self) -> None:
+        response = self.client.get("/students/99")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.headers["content-type"], "application/problem+json")
+        self.assertEqual(
+            response.json()["type"],
+            "https://example.com/problems/student-not-found",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
