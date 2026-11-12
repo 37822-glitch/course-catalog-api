@@ -115,7 +115,16 @@ class CourseDatabaseRouteTests(unittest.TestCase):
 
         missing = self.client.get("/courses/not-a-course")
         self.assertEqual(missing.status_code, 404)
-        self.assertEqual(missing.json(), {"detail": "Course not found"})
+        self.assertEqual(
+            missing.json(),
+            {
+                "type": "https://example.com/problems/course-not-found",
+                "title": "Course not found",
+                "status": 404,
+                "detail": "Course not found",
+                "instance": "/courses/not-a-course",
+            },
+        )
 
     def test_like_is_persisted_and_then_restored(self) -> None:
         models = importlib.import_module("models")
@@ -218,33 +227,39 @@ class EnrollmentDatabaseRouteTests(unittest.TestCase):
                 "/students",
                 {"name": "Aigerim Two", "email": "aigerim@example.com"},
                 409,
+                "email-taken",
                 "Student with this email already exists",
             ),
             (
                 "/enrollments",
                 {"courseId": "ai-integration", "studentId": 3},
                 409,
+                "already-enrolled",
                 "Student is already enrolled in this course",
             ),
             (
                 "/enrollments",
                 {"courseId": "nope", "studentId": 3},
                 404,
+                "course-not-found",
                 "Course not found",
             ),
             (
                 "/enrollments",
                 {"courseId": "web-security", "studentId": 999},
                 404,
+                "student-not-found",
                 "Student not found",
             ),
         )
 
-        for path, body, status, detail in cases:
+        for path, body, status, slug, detail in cases:
             with self.subTest(detail=detail):
                 response = client.post(path, json=body)
                 self.assertEqual(response.status_code, status)
-                self.assertEqual(response.json(), {"detail": detail})
+                self.assertEqual(response.headers["content-type"], "application/problem+json")
+                self.assertEqual(response.json()["type"], f"https://example.com/problems/{slug}")
+                self.assertEqual(response.json()["detail"], detail)
 
 
 if __name__ == "__main__":
