@@ -74,5 +74,57 @@ class ServicesAndProblemDetailsTests(unittest.TestCase):
             self.assertIsNotNone(count)
 
 
+class GraphQLCourseQueryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_courses_query_returns_requested_fields_in_popularity_order(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={"query": "{ courses(limit: 2) { id title credits } }"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "data": {
+                    "courses": [
+                        {
+                            "id": "ai-integration",
+                            "title": "AI/LLM Integration",
+                            "credits": 5,
+                        },
+                        {
+                            "id": "modern-frontend",
+                            "title": "Modern Frontend: React & Next.js",
+                            "credits": 5,
+                        },
+                    ]
+                }
+            },
+        )
+
+    def test_course_query_returns_null_for_an_unknown_id(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={"query": '{ course(id: "nope") { title } }'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"data": {"course": None}})
+
+    def test_schema_exposes_course_fields_and_camel_case(self) -> None:
+        graphql_api = importlib.import_module("graphql_api")
+        schema = graphql_api.schema.as_str()
+
+        self.assertIn("type Course", schema)
+        self.assertIn("isElective: Boolean!", schema)
+        self.assertIn("courses(isElective: Boolean = null, limit: Int! = 20)", schema)
+        self.assertIn("course(id: ID!): Course", schema)
+
+
 if __name__ == "__main__":
     unittest.main()

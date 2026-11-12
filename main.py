@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import problem
 import services
 from db import get_db
+from graphql_api import graphql_app
 from models import Course, Enrollment, Student
 from schemas import (
     CourseOut,
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 SessionDep = Annotated[Session, Depends(get_db)]
+app.include_router(graphql_app, prefix="/graphql")
 
 def pagination(page: int = 1, page_size: int = 20) -> dict[str, int]:
     return {"offset": (page - 1) * page_size, "limit": page_size}

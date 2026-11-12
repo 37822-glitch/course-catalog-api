@@ -4,4 +4,5 @@ sqlalchemy>=2.1,<2.2
 psycopg[binary]
 alembic
 pydantic-settings
+strawberry-graphql[fastapi]
 
