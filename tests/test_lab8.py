@@ -172,5 +172,65 @@ class GraphQLNestedQueryTests(unittest.TestCase):
         self.assertIn("enrollments(limit: Int! = 20): [Enrollment!]!", schema)
 
 
+class GraphQLMutationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.db_module = importlib.import_module("db")
+        cls.models = importlib.import_module("models")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_repeated_enrollment_returns_expected_user_error(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={
+                "query": """
+                mutation {
+                  enroll(input: {courseId: "ai-integration", studentId: "3"}) {
+                    enrollment { id }
+                    userErrors { code message }
+                  }
+                }
+                """
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("errors", response.json())
+        payload = response.json()["data"]["enroll"]
+        self.assertIsNone(payload["enrollment"])
+        self.assertEqual(payload["userErrors"][0]["code"], "ALREADY_ENROLLED")
+
+    def test_like_course_returns_incremented_course(self) -> None:
+        before = self.client.get("/courses/api-design").json()["likes"]
+        try:
+            response = self.client.post(
+                "/graphql",
+                json={
+                    "query": """
+                    mutation {
+                      likeCourse(id: "api-design") {
+                        course { id likes }
+                        userErrors { code }
+                      }
+                    }
+                    """
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("errors", response.json())
+            payload = response.json()["data"]["likeCourse"]
+            self.assertEqual(payload["course"]["likes"], before + 1)
+            self.assertEqual(payload["userErrors"], [])
+        finally:
+            with self.db_module.SessionLocal.begin() as session:
+                session.execute(
+                    self.models.Course.__table__.update()
+                    .where(self.models.Course.id == "api-design")
+                    .values(likes=before)
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
