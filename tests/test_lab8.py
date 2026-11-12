@@ -244,7 +244,7 @@ class SQLQueryCounterTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["x-sql-queries"], "1")
 
-    def test_nested_graphql_query_exposes_n_plus_one_count(self) -> None:
+    def test_student_nested_query_uses_three_batched_sql_queries(self) -> None:
         response = self.client.post(
             "/graphql",
             json={
@@ -254,7 +254,22 @@ class SQLQueryCounterTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("errors", response.json())
-        self.assertEqual(response.headers["x-sql-queries"], "7")
+        self.assertEqual(response.headers["x-sql-queries"], "3")
+
+    def test_enrollment_nested_query_uses_three_batched_sql_queries(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={
+                "query": "{ enrollments { id course { title } student { name } } }"
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("errors", response.json())
+        self.assertEqual(response.headers["x-sql-queries"], "3")
+        first = response.json()["data"]["enrollments"][0]
+        self.assertEqual(first["course"]["title"], "Modern Frontend: React & Next.js")
+        self.assertEqual(first["student"]["name"], "Aigerim Sadykova")
 
 
 if __name__ == "__main__":
