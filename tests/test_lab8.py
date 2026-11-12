@@ -232,5 +232,30 @@ class GraphQLMutationTests(unittest.TestCase):
                 )
 
 
+class SQLQueryCounterTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_rest_course_list_reports_one_sql_query(self) -> None:
+        response = self.client.get("/courses")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["x-sql-queries"], "1")
+
+    def test_nested_graphql_query_exposes_n_plus_one_count(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={
+                "query": "{ students { name enrollments { course { title } } } }"
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("errors", response.json())
+        self.assertEqual(response.headers["x-sql-queries"], "7")
+
+
 if __name__ == "__main__":
     unittest.main()
