@@ -13,14 +13,14 @@ CASES = [
     ("unknown student", "/enrollments",
      {"courseId": "web-security", "studentId": 999}, 404, "student-not-found"),
     ("name too short", "/students",
-     {"name": "N", "email": "n@example.com"}, 422, None),
+     {"name": "N", "email": "n@example.com"}, 422, "validation-error"),
 ]
 
 failed = 0
 for title, path, body, status, slug in CASES:
     response = httpx.post(BASE + path, json=body)
     kind = response.json().get("type", "-").rsplit("/", 1)[-1]
-    ok = response.status_code == status and (slug is None or kind == slug)
+    ok = response.status_code == status and kind == slug
     failed += not ok
     mark = "ok  " if ok else "FAIL"
     content_type = response.headers["content-type"]

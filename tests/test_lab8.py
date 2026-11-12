@@ -355,5 +355,30 @@ class MyCoursesRestRouteTests(unittest.TestCase):
         )
 
 
+class ValidationProblemDetailsBonusTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_all_request_validation_errors_use_problem_details(self) -> None:
+        response = self.client.post(
+            "/students",
+            json={"name": "N", "email": "bad"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.headers["content-type"], "application/problem+json")
+        self.assertEqual(
+            response.json()["type"],
+            "https://example.com/problems/validation-error",
+        )
+        self.assertEqual(response.json()["detail"], "2 invalid value(s) in the request")
+        self.assertEqual(
+            [(item["in"], item["field"]) for item in response.json()["errors"]],
+            [("body", "name"), ("body", "email")],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

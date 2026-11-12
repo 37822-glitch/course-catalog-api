@@ -162,3 +162,11 @@ at 3 SQL statements when the data grew from 3 to 20 students.
   input. `MaskErrors` is the second layer for unforeseen database or programming
   failures: it keeps the full traceback on the server but prevents implementation
   details from reaching the client.
+
+## Bonus
+
+- **Validation errors as Problem Details.** The `RequestValidationError` handler
+  reads every item from `exc.errors()` and maps its location and message into an
+  `errors` list. RFC 9457 permits extension members, so this list supplements the
+  required Problem Details fields and lets the client fix every invalid value in
+  one response.
