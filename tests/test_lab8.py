@@ -272,5 +272,57 @@ class SQLQueryCounterTests(unittest.TestCase):
         self.assertEqual(first["student"]["name"], "Aigerim Sadykova")
 
 
+class GraphQLProtectionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def _first_error(self, query: str) -> tuple[str, str]:
+        response = self.client.post("/graphql", json={"query": query})
+        return response.json()["errors"][0]["message"], response.headers["x-sql-queries"]
+
+    def test_depth_and_alias_limits_reject_queries_before_database_access(self) -> None:
+        cycle = """
+        query Cycle {
+          student(id: 2) {
+            enrollments { student { enrollments { student { enrollments { id } } } } }
+          }
+        }
+        """
+        aliases = "{ " + " ".join(
+            f'a{i}: course(id: "api-design") {{ title }}' for i in range(1, 13)
+        ) + " }"
+
+        depth_message, depth_sql = self._first_error(cycle)
+        alias_message, alias_sql = self._first_error(aliases)
+
+        self.assertIn("exceeds maximum operation depth of 5", depth_message)
+        self.assertEqual(depth_sql, "0")
+        self.assertEqual(alias_message, "12 aliases found. Allowed: 10")
+        self.assertEqual(alias_sql, "0")
+
+    def test_argument_checks_are_clear_and_internal_errors_are_masked(self) -> None:
+        limit_message, _ = self._first_error("{ courses(limit: -1) { id } }")
+        id_message, _ = self._first_error('{ student(id: "abc") { name } }')
+        huge_id_message, _ = self._first_error(
+            '{ student(id: "99999999999999999999") { name } }'
+        )
+
+        self.assertEqual(limit_message, "limit must be between 1 and 100")
+        self.assertEqual(id_message, "Invalid ID: 'abc'")
+        self.assertEqual(huge_id_message, "Unexpected error.")
+
+    def test_introspection_is_enabled_by_default(self) -> None:
+        config = importlib.import_module("config")
+        response = self.client.post(
+            "/graphql",
+            json={"query": "{ __schema { queryType { name } } }"},
+        )
+
+        self.assertTrue(config.settings.graphql_introspection)
+        self.assertEqual(response.json()["data"]["__schema"]["queryType"]["name"], "Query")
+
+
 if __name__ == "__main__":
     unittest.main()
