@@ -126,5 +126,51 @@ class GraphQLCourseQueryTests(unittest.TestCase):
         self.assertIn("course(id: ID!): Course", schema)
 
 
+class GraphQLNestedQueryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.main = importlib.import_module("main")
+        cls.client = TestClient(cls.main.app, raise_server_exceptions=False)
+
+    def test_my_courses_returns_student_enrollments_and_courses(self) -> None:
+        response = self.client.post(
+            "/graphql",
+            json={
+                "query": """
+                query MyCourses($id: ID!) {
+                  student(id: $id) {
+                    name
+                    enrollments { id course { title credits level } }
+                  }
+                }
+                """,
+                "variables": {"id": "2"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("errors", response.json())
+        student = response.json()["data"]["student"]
+        self.assertEqual(student["name"], "Daniyar Bekov")
+        self.assertEqual(
+            [item["course"]["title"] for item in student["enrollments"]],
+            [
+                "Modern Frontend: React & Next.js",
+                "Backend Foundations: FastAPI",
+                "AI/LLM Integration",
+            ],
+        )
+
+    def test_schema_exposes_student_enrollment_and_nested_queries(self) -> None:
+        graphql_api = importlib.import_module("graphql_api")
+        schema = graphql_api.schema.as_str()
+
+        self.assertIn("type Student", schema)
+        self.assertIn("type Enrollment", schema)
+        self.assertIn("students(limit: Int! = 20): [Student!]!", schema)
+        self.assertIn("student(id: ID!): Student", schema)
+        self.assertIn("enrollments(limit: Int! = 20): [Enrollment!]!", schema)
+
+
 if __name__ == "__main__":
     unittest.main()
